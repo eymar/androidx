@@ -50,7 +50,6 @@ import org.jetbrains.kotlin.ir.descriptors.WrappedPropertyGetterDescriptor
 import org.jetbrains.kotlin.ir.descriptors.WrappedPropertySetterDescriptor
 import org.jetbrains.kotlin.ir.descriptors.WrappedSimpleFunctionDescriptor
 import org.jetbrains.kotlin.ir.expressions.IrCall
-import org.jetbrains.kotlin.ir.expressions.IrConstKind
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetValue

@@ -563,8 +563,6 @@ class ComposerLambdaMemoization(
                 name = Name.identifier(lambdaName)
                 type = lambdaType
                 visibility = DescriptorVisibilities.INTERNAL
-                origin = IrDeclarationOrigin.PROPERTY_BACKING_FIELD
-                isStatic = !context.platform.isJs() // todo(KT-44943): JS doesn't have static fields
             }.also { f ->
                 f.correspondingPropertySymbol = p.symbol
                 f.parent = clazz
