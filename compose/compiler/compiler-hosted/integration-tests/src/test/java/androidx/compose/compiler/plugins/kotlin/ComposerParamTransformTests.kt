@@ -63,6 +63,7 @@ class ComposerParamTransformTests : ComposeIrTransformTest() {
         """,
         """
             val bar: Int
+              @Composable @JvmName(name = "getBar")
               get() {
                 %composer.startReplaceableGroup(<>, "C:Test.kt#2487m")
                 val tmp0 = 123
@@ -295,6 +296,7 @@ class ComposerParamTransformTests : ComposeIrTransformTest() {
         """,
         """
             val myProperty: Function0<Unit>
+              @Composable @JvmName(name = "getMyProperty")
               get() {
                 %composer.startReplaceableGroup(<>, "C:Test.kt#2487m")
                 val tmp0 = {
