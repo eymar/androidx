@@ -884,7 +884,7 @@ class ClassStabilityTransformTests : ComposeIrTransformTest() {
         val files = listOf(
             sourceFile("Test.kt", source.replace('%', '$'))
         )
-        val irModule = generateIrModuleWithJvmResolve(files)
+        val irModule = JvmCompilation().compile(files)
         val irClass = irModule.files.last().declarations.first() as IrClass
         val classStability = StabilityInferencer(pluginContext!!).stabilityOf(irClass.defaultType)
 
@@ -1006,7 +1006,7 @@ class ClassStabilityTransformTests : ComposeIrTransformTest() {
         val files = listOf(
             sourceFile("Test.kt", source.replace('%', '$'))
         )
-        return generateIrModuleWithJvmResolve(files)
+        return JvmCompilation().compile(files)
     }
 
     private fun assertTransform(
