@@ -501,9 +501,9 @@ private class IrSourcePrinterVisitor(
                         print(name)
                         print(" = ")
                     }
-                    when (name) {
-                        KtxNameConventions.DEFAULT_PARAMETER.identifier,
-                        KtxNameConventions.CHANGED_PARAMETER.identifier -> {
+                    when {
+                        name.startsWith(KtxNameConventions.DEFAULT_PARAMETER.identifier) ||
+                            name.startsWith(KtxNameConventions.CHANGED_PARAMETER.identifier) -> {
                             withIntsAsBinaryLiterals {
                                 arg.print()
                             }

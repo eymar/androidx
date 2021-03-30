@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.backend.common.ir.remapTypeParameters
 import org.jetbrains.kotlin.backend.common.serialization.IrModuleDeserializer
 import org.jetbrains.kotlin.backend.common.serialization.KotlinIrLinker
 import org.jetbrains.kotlin.backend.common.serialization.encodings.BinarySymbolData.SymbolKind.FUNCTION_SYMBOL
+import org.jetbrains.kotlin.backend.common.serialization.signature.IdSignatureSerializer
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
@@ -53,6 +54,19 @@ import org.jetbrains.kotlin.ir.util.module
 
 internal interface DecoyTransformBase {
     val context: IrPluginContext
+    val signatureBuilder: IdSignatureSerializer
+
+    fun IrFunction.getSignatureId(): Long {
+        val signature = symbol.signature
+            ?: signatureBuilder.composeSignatureForDeclaration(this)
+
+        return when (signature) {
+            is IdSignature.PublicSignature -> signature.id!!
+            is IdSignature.AccessorSignature -> signature.accessorSignature.id!!
+            is IdSignature.FileLocalSignature -> signature.id
+            is IdSignature.ScopeLocalDeclaration -> signature.id.toLong()
+        }
+    }
 
     fun irVarargString(valueArguments: List<String>): IrExpression {
         val stringArrayType = IrSimpleTypeImpl(
@@ -73,10 +87,12 @@ internal interface DecoyTransformBase {
     @OptIn(ObsoleteDescriptorBasedAPI::class)
     fun IrFunction.getComposableForDecoy(): IrFunctionSymbol {
         val implementationName = getDecoyTargetName()
+        val signatureId = getSignatureId()
         val implementation = (parent as? IrDeclarationContainer)?.declarations
             ?.filterIsInstance<IrFunction>()
             ?.firstOrNull {
-                it.getDecoyImplementationName() == implementationName
+                it.getDecoyImplementationName() == implementationName &&
+                    it.getDecoyImplementationId() == signatureId
             }
 
         if (implementation != null) {
@@ -116,6 +132,15 @@ internal interface DecoyTransformBase {
 
         @Suppress("UNCHECKED_CAST")
         val decoyImplName = annotation.getValueArgument(0) as IrConst<String>
+
+        return decoyImplName.value
+    }
+
+    fun IrFunction.getDecoyImplementationId(): Long? {
+        val annotation = getAnnotation(DecoyFqNames.DecoyImplementation) ?: return null
+
+        @Suppress("UNCHECKED_CAST")
+        val decoyImplName = annotation.getValueArgument(1) as IrConst<Long>
 
         return decoyImplName.value
     }

@@ -20,41 +20,35 @@ package androidx.compose.compiler.plugins.kotlin.lower.decoys
 
 import androidx.compose.compiler.plugins.kotlin.lower.AbstractComposeLowering
 import androidx.compose.compiler.plugins.kotlin.lower.ModuleLoweringPass
-import org.jetbrains.kotlin.backend.common.serialization.mangle.SpecialDeclarationType
+import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.serialization.signature.IdSignatureSerializer
 import org.jetbrains.kotlin.ir.IrStatement
-import org.jetbrains.kotlin.ir.backend.js.lower.serialization.ir.JsManglerIr
-import org.jetbrains.kotlin.ir.backend.jvm.serialization.JvmManglerIr
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.util.DeepCopySymbolRemapper
 import org.jetbrains.kotlin.ir.util.IdSignature
 import org.jetbrains.kotlin.ir.util.dump
 import org.jetbrains.kotlin.ir.util.getAnnotation
-import org.jetbrains.kotlin.platform.js.isJs
-import org.jetbrains.kotlin.platform.jvm.isJvm
+import org.jetbrains.kotlin.resolve.BindingTrace
 
 /**
- * Record signatures of the functions created by the [CreateDecoysTransformer] to match them in
+ * Record signatures of the functions created by the [CreateDecoysTransformer] to match them from
  * other compilation units. This step should be applied after other transforms are finished to
  * ensure that signature are matching serialized functions.
  */
 class RecordDecoySignaturesTransformer(
-    context: DecoyContext
+    pluginContext: IrPluginContext,
+    symbolRemapper: DeepCopySymbolRemapper,
+    bindingTrace: BindingTrace,
+    override val signatureBuilder: IdSignatureSerializer
 ) : AbstractComposeLowering(
-    context = context.pluginContext,
-    symbolRemapper = context.symbolRemapper,
-    bindingTrace = context.bindingTrace
+    context = pluginContext,
+    symbolRemapper = symbolRemapper,
+    bindingTrace = bindingTrace
 ),
     ModuleLoweringPass,
     DecoyTransformBase {
-    private val mangler = when {
-        context.pluginContext.platform.isJs() -> JsManglerIr
-        context.pluginContext.platform.isJvm() -> JvmManglerIr
-        else -> error("unsupported platform")
-    }
-
-    private val signatureBuilder = IdSignatureSerializer(mangler)
 
     override fun lower(module: IrModuleFragment) {
         module.transformChildrenVoid()
@@ -91,6 +85,6 @@ class RecordDecoySignaturesTransformer(
         return super.visitFunction(declaration)
     }
 
-    private fun IrDeclaration.canBeLinkedAgainst() =
-        mangler.getExportChecker().check(this, SpecialDeclarationType.REGULAR)
+    private fun IrDeclaration.canBeLinkedAgainst(): Boolean =
+        signatureBuilder.mangler.run { this@canBeLinkedAgainst.isExported() }
 }

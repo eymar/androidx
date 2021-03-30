@@ -17,37 +17,6 @@
 package androidx.compose.compiler.plugins.kotlin.lower.decoys
 
 import androidx.compose.compiler.plugins.kotlin.ComposeFqNames
-import androidx.compose.compiler.plugins.kotlin.lower.ComposableSymbolRemapper
-import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
-import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
-import org.jetbrains.kotlin.resolve.BindingTrace
-
-fun withDecoys(
-    decoyContext: DecoyContext,
-    innerTransform: () -> Unit
-) {
-    if (!decoyContext.decoysEnabled) {
-        innerTransform()
-        return
-    }
-
-    decoyContext.apply {
-        CreateDecoysTransformer(decoyContext).lower(moduleFragment)
-        SubstituteDecoyCallsTransformer(decoyContext).lower(moduleFragment)
-
-        innerTransform()
-
-        RecordDecoySignaturesTransformer(decoyContext).lower(moduleFragment)
-    }
-}
-
-class DecoyContext(
-    val decoysEnabled: Boolean,
-    val pluginContext: IrPluginContext,
-    val symbolRemapper: ComposableSymbolRemapper,
-    val bindingTrace: BindingTrace,
-    val moduleFragment: IrModuleFragment
-)
 
 object DecoyFqNames {
     val Decoy = ComposeFqNames.internalFqNameFor("Decoy")

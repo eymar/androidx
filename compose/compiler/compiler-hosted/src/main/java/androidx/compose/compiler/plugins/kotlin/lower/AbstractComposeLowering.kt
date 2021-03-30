@@ -801,6 +801,14 @@ abstract class AbstractComposeLowering(
         value
     )
 
+    protected fun irConst(value: Long): IrConst<Long> = IrConstImpl(
+        UNDEFINED_OFFSET,
+        UNDEFINED_OFFSET,
+        context.irBuiltIns.longType,
+        IrConstKind.Long,
+        value
+    )
+
     protected fun irConst(value: String): IrConst<String> = IrConstImpl(
         UNDEFINED_OFFSET,
         UNDEFINED_OFFSET,
@@ -1201,12 +1209,13 @@ abstract class AbstractComposeLowering(
     }
 
     protected fun dexSafeName(name: Name): Name {
-        return if (name.isSpecial || name.asString().contains(' ')) {
+        val unsafeSymbolsRegex = "[ <>]".toRegex()
+        return if (
+            name.isSpecial || name.asString().contains(unsafeSymbolsRegex)
+        ) {
             val sanitized = name
                 .asString()
-                .replace(' ', '$')
-                .replace('<', '$')
-                .replace('>', '$')
+                .replace(unsafeSymbolsRegex, "\\$")
             Name.identifier(sanitized)
         } else name
     }
