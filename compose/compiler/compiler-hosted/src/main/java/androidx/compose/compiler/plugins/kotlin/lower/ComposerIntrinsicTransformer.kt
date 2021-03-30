@@ -39,7 +39,7 @@ class ComposerIntrinsicTransformer(
     FileLoweringPass,
     ModuleLoweringPass {
 
-    private val currentComposerIntrinsic by lazy { currentComposerFqName() }
+    private val currentComposerIntrinsic = currentComposerFqName()
 
     // get-currentComposer gets transformed as decoy, as the getter now has additional params
     private fun currentComposerFqName(): FqName =

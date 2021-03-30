@@ -90,6 +90,7 @@ import org.jetbrains.kotlin.js.resolve.diagnostics.findPsi
 import org.jetbrains.kotlin.load.kotlin.PackagePartClassUtils
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.platform.js.isJs
+import org.jetbrains.kotlin.platform.jvm.isJvm
 import org.jetbrains.kotlin.psi.KtFunctionLiteral
 import org.jetbrains.kotlin.resolve.BindingTrace
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
@@ -563,6 +564,7 @@ class ComposerLambdaMemoization(
                 name = Name.identifier(lambdaName)
                 type = lambdaType
                 visibility = DescriptorVisibilities.INTERNAL
+                isStatic = context.platform.isJvm()
             }.also { f ->
                 f.correspondingPropertySymbol = p.symbol
                 f.parent = clazz
@@ -701,6 +703,12 @@ class ComposerLambdaMemoization(
         return if (!isJs) {
             composableLambdaExpression
         } else {
+            /*
+             * JS doesn't have ability to extend FunctionN types, therefore the lambda call must be
+             * transformed into composableLambda(...)::invoke. It loses some of the optimizations
+             * related to skipping updates that way, but still ensures correct handling of
+             * lambdas.
+             */
             val realArgumentCount = argumentCount +
                 if (function.extensionReceiverParameter != null) 1 else 0
 

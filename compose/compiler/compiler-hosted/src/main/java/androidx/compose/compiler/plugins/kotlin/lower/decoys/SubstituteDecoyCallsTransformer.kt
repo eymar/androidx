@@ -18,6 +18,7 @@ package androidx.compose.compiler.plugins.kotlin.lower.decoys
 
 import androidx.compose.compiler.plugins.kotlin.lower.AbstractComposeLowering
 import androidx.compose.compiler.plugins.kotlin.lower.ModuleLoweringPass
+import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.ir.remapTypeParameters
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
@@ -33,19 +34,23 @@ import org.jetbrains.kotlin.ir.expressions.impl.IrConstructorCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrDelegatingConstructorCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrFunctionReferenceImpl
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.ir.util.DeepCopySymbolRemapper
 import org.jetbrains.kotlin.ir.util.copyTypeAndValueArgumentsFrom
 import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.patchDeclarationParents
+import org.jetbrains.kotlin.resolve.BindingTrace
 
 /**
- * Replaces calls to original functions to their second variant created in [CreateDecoysTransformer]
+ * Replaces all decoys references to their implementations created in [CreateDecoysTransformer].
  */
 class SubstituteDecoyCallsTransformer(
-    context: DecoyContext
+    pluginContext: IrPluginContext,
+    symbolRemapper: DeepCopySymbolRemapper,
+    bindingTrace: BindingTrace
 ) : AbstractComposeLowering(
-    context = context.pluginContext,
-    symbolRemapper = context.symbolRemapper,
-    bindingTrace = context.bindingTrace
+    context = pluginContext,
+    symbolRemapper = symbolRemapper,
+    bindingTrace = bindingTrace
 ),
     ModuleLoweringPass,
     DecoyTransformBase {
@@ -56,11 +61,12 @@ class SubstituteDecoyCallsTransformer(
     }
 
     override fun visitSimpleFunction(declaration: IrSimpleFunction): IrStatement {
-        if (declaration.isDecoy()) {
-            return super.visitSimpleFunction(declaration)
-        }
+        // Apart from function / constructor calls, decoys can surface in overridden symbols,
+        // so we need to replace them as well.
+        // They are replaced only for decoy implementations however, as decoys should match
+        // original descriptors.
 
-        if (declaration.overriddenSymbols.none { it.owner.isDecoy() }) {
+        if (declaration.isDecoy()) {
             return super.visitSimpleFunction(declaration)
         }
 
@@ -72,9 +78,8 @@ class SubstituteDecoyCallsTransformer(
             }
         }
 
-        val copiedDeclaration = declaration.deepCopyWithSymbols(declaration.parent)
-        copiedDeclaration.overriddenSymbols = newOverriddenSymbols
-        return super.visitSimpleFunction(copiedDeclaration)
+        declaration.overriddenSymbols = newOverriddenSymbols
+        return super.visitSimpleFunction(declaration)
     }
 
     override fun visitConstructorCall(expression: IrConstructorCall): IrExpression {

@@ -19,6 +19,7 @@ package androidx.compose.compiler.plugins.kotlin.lower.decoys
 import androidx.compose.compiler.plugins.kotlin.ComposeFqNames
 import androidx.compose.compiler.plugins.kotlin.lower.AbstractComposeLowering
 import androidx.compose.compiler.plugins.kotlin.lower.ModuleLoweringPass
+import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.ir.addChild
 import org.jetbrains.kotlin.backend.common.ir.copyParameterDeclarationsFrom
 import org.jetbrains.kotlin.backend.common.ir.copyTo
@@ -26,6 +27,7 @@ import org.jetbrains.kotlin.backend.common.ir.copyTypeParametersFrom
 import org.jetbrains.kotlin.backend.common.ir.moveBodyTo
 import org.jetbrains.kotlin.backend.common.ir.remapTypeParameters
 import org.jetbrains.kotlin.backend.common.lower.DeclarationIrBuilder
+import org.jetbrains.kotlin.backend.common.serialization.mangle.MangleMode
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.builders.declarations.IrFunctionBuilder
@@ -38,31 +40,55 @@ import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationContainer
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
-import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithName
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.impl.IrConstructorCallImpl
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.classifierOrNull
+import org.jetbrains.kotlin.ir.util.DeepCopySymbolRemapper
 import org.jetbrains.kotlin.ir.util.constructors
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isLocal
 import org.jetbrains.kotlin.ir.util.patchDeclarationParents
+import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.resolve.BindingTrace
 
 /**
  * Copies each IR declaration that won't match descriptors after Compose transforms (see [shouldBeRemapped]).
- * Original functions are stubbed and kept to match descriptors, but all following transforms are
- * applied to the copied version.
+ * Original function are kept to match descriptors with a stubbed body, all other transforms are
+ * applied to the copied version only.
+ *
+ * Example:
+ * ```
+ * @Composable
+ * fun A(x: Any) {}
+ * ```
+ *
+ * is transformed into:
+ *
+ * ```
+ * @Decoy(targetName="A$composable")
+ * fun A(x: Any) {
+ *  illegalDecoyCallException("A")
+ * }
+ *
+ * @Composable
+ * @DecoyImplementation("A$composable")
+ * fun A$composable(x: Any) {}
+ * ```
  */
 class CreateDecoysTransformer(
-    context: DecoyContext
+    pluginContext: IrPluginContext,
+    symbolRemapper: DeepCopySymbolRemapper,
+    bindingTrace: BindingTrace
 ) : AbstractComposeLowering(
-    context = context.pluginContext,
-    symbolRemapper = context.symbolRemapper,
-    bindingTrace = context.bindingTrace
+    context = pluginContext,
+    symbolRemapper = symbolRemapper,
+    bindingTrace = bindingTrace
 ),
     ModuleLoweringPass,
     DecoyTransformBase {
@@ -77,7 +103,7 @@ class CreateDecoysTransformer(
     }
 
     private val decoyStub by lazy {
-        getInternalFunction("decoy").owner
+        getInternalFunction("illegalDecoyCallException").owner
     }
 
     override fun lower(module: IrModuleFragment) {
@@ -130,16 +156,21 @@ class CreateDecoysTransformer(
         }
     }
 
-    private fun IrFunction.decoyImplementationName(): Name =
-        Name.identifier(
-            findNonRepeatingName(
-                isRepeating = {
-                    originalFunctions.any { (f, p) ->
-                        p == parent && f.getDecoyImplementationName()?.contentEquals(it) == true
-                    }
-                }
+    @OptIn(ObsoleteDescriptorBasedAPI::class)
+    private fun IrFunction.decoyImplementationName(): Name {
+        val parameterTypes = valueParameters.joinToString("_") {
+            it.type.classifierOrNull?.descriptor?.name?.asString().orEmpty()
+        }
+
+
+        return dexSafeName(
+            Name.identifier(
+                name.asString()
+                    + if (parameterTypes.isNotEmpty()) "_$parameterTypes" else ""
+                    + IMPLEMENTATION_FUNCTION_SUFFIX
             )
         )
+    }
 
     @OptIn(ObsoleteDescriptorBasedAPI::class)
     private fun IrFunction.copyWithName(
@@ -227,30 +258,12 @@ class CreateDecoysTransformer(
             }
     }
 
-    private fun IrDeclarationWithName.findNonRepeatingName(
-        isRepeating: (CharSequence) -> Boolean
-    ): String =
-        buildString {
-            append(dexSafeName(name).asString())
-            append(DUPLICATED_FUNCTION_SUFFIX)
-            var index = 0
-            while (isRepeating(this)) {
-                if (index == 0) {
-                    append(index)
-                } else {
-                    deleteCharAt(lastIndex)
-                    append(index)
-                }
-                index++
-            }
-        }
-
     private fun IrFunction.shouldBeRemapped(): Boolean =
-        !localFunction() && (hasComposableAnnotation() || hasComposableParameter())
+        !isLocalFunction() && (hasComposableAnnotation() || hasComposableParameter())
 
-    private fun IrFunction.localFunction(): Boolean =
-        origin == IrDeclarationOrigin.LOCAL_FUNCTION_FOR_LAMBDA
-            || (isLocal && (this is IrSimpleFunction && !overridesComposable()))
+    private fun IrFunction.isLocalFunction(): Boolean =
+        origin == IrDeclarationOrigin.LOCAL_FUNCTION_FOR_LAMBDA ||
+            (isLocal && (this is IrSimpleFunction && !overridesComposable()))
 
     private fun IrSimpleFunction.overridesComposable() =
         overriddenSymbols.any {
@@ -273,6 +286,6 @@ class CreateDecoysTransformer(
     }
 
     companion object {
-        private const val DUPLICATED_FUNCTION_SUFFIX = "\$composable"
+        private const val IMPLEMENTATION_FUNCTION_SUFFIX = "_composable"
     }
 }

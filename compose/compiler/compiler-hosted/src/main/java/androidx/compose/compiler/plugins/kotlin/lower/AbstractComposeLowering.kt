@@ -1201,12 +1201,13 @@ abstract class AbstractComposeLowering(
     }
 
     protected fun dexSafeName(name: Name): Name {
-        return if (name.isSpecial || name.asString().contains(' ')) {
+        val unsafeSymbolsRegex = "[ <>]".toRegex()
+        return if (
+            name.isSpecial || name.asString().contains(unsafeSymbolsRegex)
+        ) {
             val sanitized = name
                 .asString()
-                .replace(' ', '$')
-                .replace('<', '$')
-                .replace('>', '$')
+                .replace(unsafeSymbolsRegex, "\\$")
             Name.identifier(sanitized)
         } else name
     }
