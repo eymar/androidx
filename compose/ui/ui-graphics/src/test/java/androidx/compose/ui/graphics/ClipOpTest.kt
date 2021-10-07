@@ -29,4 +29,16 @@ class ClipOpTest {
         assertEquals("Difference", ClipOp.Difference.toString())
         assertEquals("Intersect", ClipOp.Intersect.toString())
     }
+
+    @Test
+    fun testToString3() {
+        assertEquals("Difference", ClipOp.Difference.toString())
+        assertEquals("Intersect", ClipOp.Intersect.toString())
+    }
+    
+    @Test
+    fun testToString4() {
+        assertEquals("Difference", ClipOp.Difference.toString())
+        assertEquals("Intersect", ClipOp.Intersect.toString())
+    }
 }
